@@ -55,8 +55,8 @@ def fuel_to_align_to_point_2(crabs, point):
     2 to move the second, 3 to move the third, etc thus to move n: 1 + 2 + .. + n
     """
 
-    deltas = np.array(crabs) - point
-    costs = np.abs(deltas) * (np.abs(deltas)+1) / 2 # Need absolute distances
+    abs_deltas = np.abs(np.array(crabs) - point)
+    costs = abs_deltas * (abs_deltas + 1)
     result = np.sum(costs)
     return result
 
@@ -71,15 +71,9 @@ def calculate_cheapest_alignment_posn_2(crabs):
     Args:
         - crabs : List of crab positions
     """
-
-    cheapest_pos = None
-    cheapest_fuel = np.inf
-    for posn in range(np.min(crabs), np.max(crabs)):
-        this_fuel = fuel_to_align_to_point_2(crabs, posn)
-        if this_fuel < cheapest_fuel:
-            cheapest_pos = posn
-            cheapest_fuel = this_fuel
-    return cheapest_pos, cheapest_fuel
+    candidate_posns = np.arange(np.min(crabs), np.max(crabs))
+    fuel_costs = [fuel_to_align_to_point_2(crabs, i) for i in candidate_posns]
+    return candidate_posns[np.argmin(fuel_costs)], np.min(fuel_costs)
 
 
 
@@ -91,17 +85,19 @@ def main():
     test_values = [int(i) for i in TEST_DATA[0].split(",")]
     with open(INPUT_PATH, 'r', encoding="utf-8") as a_file:
         input_state = [int(i) for i in next(a_file).split(",")]
+
+
     print("Part 1:")
     test_result = fuel_to_align_to_point(test_values, 2)
     print(f"To align all test data to posn 2: {test_result}")
     cheapest_pos, cheapest_fuel = calculate_cheapest_alignment_posn(test_values)
     print(
-        f"Test data: cheapest position to align to, and fuel req: {cheapest_pos}, {cheapest_fuel}"
+        f"Part 1, Test data: cheapest position to align to, and fuel req: {cheapest_pos}, {cheapest_fuel}"
     )
 
     cheapest_pos, cheapest_fuel = calculate_cheapest_alignment_posn(input_state)
     print(
-        f"Input data: cheapest position to align to, and fuel req: {cheapest_pos}, {cheapest_fuel}"
+        f"Part 1, Input data: cheapest position to align to, and fuel req: {cheapest_pos}, {cheapest_fuel}"
     )
 
     # Part 2:
