@@ -1,7 +1,7 @@
 """
-SW 2021-12-05 Advent of code day 6
+SW 2021-12-08 Advent of code day 7
 
-https://adventofcode.com/2021/day/6
+https://adventofcode.com/2021/day/7
 """
 
 import os
