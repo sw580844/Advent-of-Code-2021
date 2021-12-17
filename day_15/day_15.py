@@ -1,5 +1,5 @@
 """
-SW 2021-12-16 Advent of code day 15
+SW 2021-12-15 Advent of code day 15
 
 https://adventofcode.com/2021/day/15
 """
@@ -7,7 +7,10 @@ https://adventofcode.com/2021/day/15
 import os
 import sys
 import datetime
-import functools
+
+import numpy as np
+
+
 
 INPUT_PATH = os.path.join(
     os.path.split(os.path.abspath(__file__))[0],
@@ -15,160 +18,126 @@ INPUT_PATH = os.path.join(
 )
 
 TEST_DATA = [
-    "D2FE28",
-    "38006F45291200",
-    "EE00D40C823060",
-    "8A004A801A8002F478",
-    "620080001611562C8802118E34",
-    "C0015000016115A2E0802F182340",
-    "A0016C880162017C3686B18A3D4780",
+    "1163751742",
+    "1381373672",
+    "2136511328",
+    "3694931569",
+    "7463417111",
+    "1319128137",
+    "1359912421",
+    "3125421639",
+    "1293138521",
+    "2311944581",
 ]
 
-TEST_DATA_2 = [
-    "C200B40A82",
-    "04005AC33890",
-    "880086C3E88112",
-    "CE00C43D881120",
-    "D8005AC2A8F0",
-    "F600BC2D8F",
-    "9C005AC2F8F0",
-    "9C0141080250320F1802104A08",
-]
+def parse_data(lines):
+    """
+    Parse data to grid
+    """
+    grid = []
+    for line in lines:
+        grid.append([int(i) for i in line])
+    grid = np.array(grid)
+    return grid
 
-def read_bits(bit_idx, number_bits_to_read, byte_list):
+def compute_minimum_danger_path_grid(grid):
     """
-    Reads a number of bits into an integer
+    Create a grid showing the minimum summed danger to reach the bottom right
+
+    Upon reflection, this assumes that loops aren't likely
     """
-    result = 0
-    for i in range(0, number_bits_to_read):
-        result = (result << 1) + read_bit(bit_idx + i, byte_list)
+
+    result = np.zeros_like(grid)
+
+
+    for row_idx in range(1, result.shape[0]*2):
+        for col_idx in range(0, row_idx+1):
+            # print(f"{row_idx - col_idx}, {col_idx}")
+            i, j = row_idx - col_idx, col_idx
+            if i < 0 or i >= result.shape[0]:
+                continue
+            if j < 0 or j >= result.shape[1]:
+                continue
+            neighbours = []
+            if i - 1  >= 0:
+                neighbours.append([i-1, j])
+            if j - 1 >= 0:
+                neighbours.append([i, j-1])
+            neighbour_vals = [result[i, j] for (i,j) in neighbours]
+            result[row_idx - col_idx, col_idx] = min(neighbour_vals) + grid[row_idx - col_idx, col_idx]
+
     return result
 
-
-
-def read_bit(bit_idx, byte_list):
+def compute_min_danger_path_grid_2(grid):
     """
-    Reads a single bit, result is an integer
+    Second way to construct minimum path grid, this brute forces and iterates over every array
+    element until there's no change between steps
+
     """
-    byte_point = bit_idx // 8
-    mask = 0b10000000 >> (bit_idx % 8)
-    return (byte_list[byte_point] & mask) >> (7 - (bit_idx % 8))
+    # Default state, -1
+    old_result = np.zeros_like(grid) -1
+    old_result[0,0] = 0
 
-
-def read_packet_2(byte_list, bit_counter):
-    """
-    Given byte list, and position to start, read in a packet
-
-    return:
-
-        new bit counter
-        packet (list of version, type, payload)
-    """
+    # In a while loop, continuously update until finished
+    counter = 0
     while True:
-        # Read in 3 bits for version
-        packet_version = read_bits(bit_counter, 3, byte_list)
-        bit_counter = bit_counter + 3
-        packet_type = read_bits(bit_counter, 3, byte_list)
-        bit_counter = bit_counter + 3
-        if packet_type == 4:
-            # Literal type
-            # Read in groups of 5, first bit indicates whether another group to come
-            literal_value = 0
-            while True:
-                bits = read_bits(bit_counter, 5, byte_list)
-                bit_counter = bit_counter + 5
-                literal_value = (literal_value << 4) + (bits & 0b00001111)
-                if not (0b00010000 & bits):
-                    break
-            return bit_counter, [packet_version, packet_type, literal_value, ]
-
+        print(f"Counter: {counter}")
+        new_result = old_result.copy()
+        for i in range(0, new_result.shape[0]):
+            for j in range(0, new_result.shape[1]):
+                if i == 0 and j == 0:
+                    continue
+                neighbours = [
+                    [i-1, j],
+                    [i+1, j],
+                    [i, j-1],
+                    [i, j+1]
+                ]
+                neighbours = [(a,b) for (a,b) in neighbours if 0 <= a < new_result.shape[0]]
+                neighbours = [(a,b) for (a,b) in neighbours if 0 <= b < new_result.shape[1]]
+                neighbour_vals = [new_result[a, b] for (a,b) in neighbours]
+                neighbour_vals = [i for i in neighbour_vals if i > -1]
+                # print(i, j, neighbours)
+                new_result[i,j] = min(neighbour_vals) + grid[i,j]
+        counter = counter + 1
+        if (new_result == old_result).all():
+            # Break if no change
+            break
         else:
-            length_type = read_bit(bit_counter, byte_list)
-            bit_counter = bit_counter + 1
-            # Going to be a list of more packets
-            child_packets = []
-            if length_type == 0:
-                # Next 15 bits give number of bits to read
-                total_bit_length_coming = read_bits(bit_counter, 15, byte_list)
-                bit_counter = bit_counter + 15
-                end_at = bit_counter + total_bit_length_coming
-                # So, read in packets until we reach the end
-                while bit_counter < end_at:
-                    newbit_counter, this_packet = read_packet_2(byte_list, bit_counter)
-                    child_packets = child_packets + [this_packet]
-                    bit_counter = newbit_counter
-                return bit_counter, [packet_version, packet_type, child_packets]
-            else:
-                # Next 11 bits give number of packets to read
-                packets_coming = read_bits(bit_counter, 11, byte_list)
-                bit_counter = bit_counter + 11
-                for _ in range(0, packets_coming):
-                    newbit_counter, this_packet = read_packet_2(byte_list, bit_counter)
-                    child_packets.append(this_packet)
-                    bit_counter = newbit_counter
-                return bit_counter, [packet_version, packet_type, child_packets]
-    # End of func
+            # Set result to old result and start again
+            old_result = new_result
+    return new_result
 
-def version_sum(packet):
+
+def print_grid(grid):
     """
-    Travels through packet, calculates version sum
+    Quick func to print the grid out
     """
-    result = 0
-    this_version = packet[0]
-    result = result + this_version
-    # Try if iterable, catch exception
-    try:
-        for child_packet in packet[2]:
-            result = result + version_sum(child_packet)
-    except TypeError:
-        pass
+    print(grid.shape)
+    for row in grid:
+        for element in row:
+            print("{:02d},".format(element), end="")
+        print("")
+    return
+
+def expand_grid(grid):
+    """
+    For part 2, we copy the original grid 5 times in horz and vert, and +1 each time
+    Values > 9 wrap around to 1
+    """
+    result = np.zeros((grid.shape[0] * 5, grid.shape[1] * 5), dtype=int)
+    orig_rows = grid.shape[0]
+    orig_cols = grid.shape[1]
+    for i in range(0, 5):
+        for j in range(0, 5):
+            this_section = grid + (i+j)
+            # Wrap around
+            func = np.vectorize(lambda x: x if x < 10 else x % 9)
+            # this_section[this_section > 9] = this_section % 9
+            this_section = func(this_section)
+            # Now paste in
+            result[i * orig_rows:(i+1) * orig_rows, j * orig_cols:(j+1) * orig_cols] = this_section
     return result
-
-
-def parse_packet(packet, verbose=False):
-    """
-    Given a packet, looks at the packet type and then evaluates the result
-    """
-    _, packet_type, packet_payload = packet
-    if packet_type == 0:
-        # Sum packet
-        result = sum([parse_packet(i) for i in packet_payload])
-    elif packet_type == 1:
-        # Multiply packet
-        result = functools.reduce(lambda x, y: x*y, [parse_packet(i) for i in packet_payload], 1)
-    elif packet_type == 2:
-        result = min([parse_packet(i) for i in packet_payload])
-    elif packet_type == 3:
-        result = max([parse_packet(i) for i in packet_payload])
-    elif packet_type == 4:
-        result = packet_payload
-    elif packet_type == 5:
-        # Greater than
-        first = parse_packet(packet_payload[0])
-        second = parse_packet(packet_payload[1])
-        if first > second:
-            result = 1
-        else:
-            result = 0
-    elif packet_type == 6:
-        # Less than
-        first = parse_packet(packet_payload[0])
-        second = parse_packet(packet_payload[1])
-        if first < second:
-            result = 1
-        else:
-            result = 0
-    elif packet_type == 7:
-        first = parse_packet(packet_payload[0])
-        second = parse_packet(packet_payload[1])
-        if first == second:
-            result = 1
-        else:
-            result = 0
-    if verbose:
-        print(result)
-    return result
-
 
 def main():
     """
@@ -176,39 +145,34 @@ def main():
     """
     time_start = datetime.datetime.now()
     print(f"Time start: {time_start}")
-
+    test_grid = parse_data(TEST_DATA)
     with open(INPUT_PATH, 'r') as a_file:
-        input_line = next(a_file).rstrip("\n")
+        input_lines = [i.rstrip("\n") for i in a_file]
+    input_grid = parse_data(input_lines)
 
-    print("Test data:")
-    for i, line in enumerate(TEST_DATA):
-        print(f"Line {i} '{line}: ")
-        line_bytes = bytearray.fromhex(line)
-        print(line_bytes)
-        _, result = read_packet_2(line_bytes, 0)
-        # print(f"Result of reading packet: {result}")
-        print(f"Version sum: {version_sum(result)}")
-        print("")
-
-    input_bytes = bytearray.fromhex(input_line)
-    _, input_packet = read_packet_2(input_bytes, 0)
-    # print(f"Result of reading input data as packet: {input_packet}")
-    print(f"Version sum of input packet: {version_sum(input_packet)}")
-
-    print("\nPart 2:\n")
-    for i, line in enumerate(TEST_DATA_2):
-        print(f"Line {i} '{line}: ")
-        line_bytes = bytearray.fromhex(line)
-        print(line_bytes)
-        _, result = read_packet_2(line_bytes, 0)
-        parse_result = parse_packet(result)
-        print(f"Test line parse result: {parse_result}")
-        print("")
-
-    input_parsed = parse_packet(input_packet)
-    print(f"Evaluated input is {input_parsed}")
+    min_danger_path_grid = compute_minimum_danger_path_grid(test_grid)
+    print("Test data: Grid of minimum danger to reach point:")
+    print(min_danger_path_grid[-1, -1])
 
 
+    result = compute_min_danger_path_grid_2(test_grid)
+    print_grid(result)
+
+    min_danger_path_grid = compute_minimum_danger_path_grid(input_grid)
+    print(f"Erroneous result for input data: {min_danger_path_grid[-1, -1]}")
+    min_danger_path_grid = compute_min_danger_path_grid_2(input_grid)
+    print("Input data: Grid of minimum danger to reach point:")
+    print(min_danger_path_grid[-1, -1])
+
+    # Part 2: the grid is expanded
+    print("Part 2:")
+    expanded_test = expand_grid(test_grid)
+    expanded_input = expand_grid(input_grid)
+
+    min_danger_path_grid = compute_min_danger_path_grid_2(expanded_test)
+    print(f"Test data: Minimum danger path {min_danger_path_grid[-1,-1]}")
+    min_danger_path_grid = compute_min_danger_path_grid_2(expanded_input)
+    print(f"Input data: Minimum danger path {min_danger_path_grid[-1,-1]}")
 
     time_end = datetime.datetime.now()
     print(f"Time end: {time_end}")
